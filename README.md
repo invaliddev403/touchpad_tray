@@ -1,3 +1,5 @@
+# Description
+
 This is a simple Touchpad Tray Icon for Wayland systems that will toggle the touchpad between enabled/disabled.
 
 # Requirements
@@ -16,4 +18,10 @@ Update the .desktop file with the correct Exec path and place it at the followin
 
 ```
 ~/.config/autostart/touchpad-tray.desktop
+```
+
+# Make Executable
+
+```
+chmod +x touchpad_tray.py
 ```
