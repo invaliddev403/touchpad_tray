@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Exec=/your/path/here/touchpad_tray/touchpad_tray.py
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+Name=Touchpad Tray Toggle
+Comment=Tray icon to toggle touchpad under Wayland
