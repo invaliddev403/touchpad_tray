@@ -2,7 +2,16 @@
 
 This is a simple Touchpad Tray Icon for Wayland systems that will toggle the touchpad between enabled/disabled.
 
-# Requirements
+# Installer Script
+
+```
+chmod +x install_touchpad_tray.sh
+.\install_touchpad_tray.sh
+```
+
+# Manual Install
+
+## Install Requirements
 
 ```
 sudo apt install \
@@ -12,7 +21,7 @@ sudo apt install \
   gsettings-desktop-schemas
 ```
 
-# Autostart
+## Enable Autostart
 
 Update the .desktop file with the correct Exec path and place it at the following location:
 
@@ -20,7 +29,7 @@ Update the .desktop file with the correct Exec path and place it at the followin
 ~/.config/autostart/touchpad-tray.desktop
 ```
 
-# Make Executable
+## Make Executable
 
 ```
 chmod +x touchpad_tray.py
