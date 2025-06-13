@@ -6,6 +6,7 @@ SCRIPT_NAME="touchpad_tray.py"
 DESKTOP_FILE_NAME="touchpad-tray.desktop"
 INSTALL_DIR="$HOME/.local/bin"
 AUTOSTART_DIR="$HOME/.config/autostart"
+APPLICATIONS_DIR="$HOME/.local/share/applications"
 ICON_NAME="input-touchpad-symbolic"  # You can change this to a path if needed
 
 echo "[*] Ensuring dependencies are installed..."
@@ -17,7 +18,8 @@ if command -v apt &>/dev/null; then
         python3-gi \
         gir1.2-gtk-3.0 \
         gir1.2-appindicator3-0.1 \
-        gsettings-desktop-schemas
+        gsettings-desktop-schemas \
+        usbutils
 elif command -v pacman &>/dev/null; then
     sudo pacman -Sy --noconfirm \
         python-gobject \
@@ -36,9 +38,8 @@ cp "$SCRIPT_NAME" "$INSTALL_DIR/"
 
 FULL_SCRIPT_PATH="$INSTALL_DIR/$SCRIPT_NAME"
 
-echo "[*] Creating autostart desktop file..."
-
-mkdir -p "$AUTOSTART_DIR"
+# Create desktop entry content
+mkdir -p "$AUTOSTART_DIR" "$APPLICATIONS_DIR"
 
 cat > "$AUTOSTART_DIR/$DESKTOP_FILE_NAME" <<EOF
 [Desktop Entry]
@@ -51,9 +52,14 @@ Name=Touchpad Tray
 Comment=Toggle touchpad from system tray (Wayland-safe)
 Icon=$ICON_NAME
 Terminal=false
+Categories=Utility;
 EOF
+
+# Copy same desktop file to applications menu
+cp "$AUTOSTART_DIR/$DESKTOP_FILE_NAME" "$APPLICATIONS_DIR/$DESKTOP_FILE_NAME"
 
 echo "[✔] Installed to: $FULL_SCRIPT_PATH"
 echo "[✔] Autostart entry created: $AUTOSTART_DIR/$DESKTOP_FILE_NAME"
+echo "[✔] App menu shortcut created: $APPLICATIONS_DIR/$DESKTOP_FILE_NAME"
 echo "[→] You can now run the tray app manually or reboot to auto-start it."
 
