@@ -1,15 +1,32 @@
 #!/usr/bin/env python3
+import os
+import signal
+import subprocess
+import threading
+import time
+
+LOCKFILE = "/tmp/touchpad_tray.lock"
+
+def enforce_single_instance():
+    if os.path.exists(LOCKFILE):
+        try:
+            with open(LOCKFILE, "r") as f:
+                pid = int(f.read().strip())
+            os.kill(pid, signal.SIGTERM)
+            print(f"[+] Killed existing touchpad_tray instance (PID {pid})")
+        except Exception as e:
+            print(f"[!] Failed to kill existing instance: {e}")
+    with open(LOCKFILE, "w") as f:
+        f.write(str(os.getpid()))
+
+enforce_single_instance()
+
 import gi
 # Specify the versions **before** importing the modules, otherwise Gtk 4 may be
 # auto‑loaded by other software and conflict with AppIndicator bindings.
 gi.require_version("Gtk", "3.0")
 gi.require_version("AppIndicator3", "0.1")
 from gi.repository import Gtk, AppIndicator3, GLib
-
-import subprocess
-import os
-import threading
-import time
 
 APP_ID = "touchpad_tray"
 SCHEMA = "org.gnome.desktop.peripherals.touchpad"
@@ -18,7 +35,6 @@ CONFIG_PATH = os.path.expanduser("~/.config/touchpad_tray.conf")
 
 ICON_ENABLED = "input-touchpad-symbolic"
 ICON_DISABLED = "input-mouse-symbolic"
-
 
 def get_status():
     """Return the current touchpad send‑events state (enabled/disabled)."""
@@ -108,7 +124,8 @@ class TouchpadTray:
         self.menu.append(self.toggle_item)
 
         # Auto‑disable option
-        self.auto_disable_item = Gtk.CheckMenuItem(label="Auto‑disable if USB mouse connected")
+        self.auto_disable_item = Gtk.CheckMenuItem()
+        self.update_auto_disable_label()
         self.auto_disable_item.set_active(self.auto_disable_enabled)
         self.auto_disable_item.connect("toggled", self.toggle_auto_disable)
         self.menu.append(self.auto_disable_item)
@@ -133,14 +150,24 @@ class TouchpadTray:
         current = get_status()
         set_status(current != "enabled")
         self.update_icon()
+        
+    def update_auto_disable_label(self):
+        label = "Auto-disable if USB mouse connected "
+        label += "✅ Enabled" if self.auto_disable_enabled else "❌ Disabled"
+        self.auto_disable_item.set_label(label)
+        self.auto_disable_item.set_active(self.auto_disable_enabled)
 
     def toggle_auto_disable(self, widget):
         self.auto_disable_enabled = widget.get_active()
         save_config(self.auto_disable_enabled)
+        self.update_auto_disable_label()
         if self.auto_disable_enabled:
             self.start_monitoring()
 
     def quit(self, _):
+        set_status(True)  # Ensure touchpad is enabled before exiting
+        if os.path.exists(LOCKFILE):
+            os.remove(LOCKFILE)
         Gtk.main_quit()
 
     # ───────────────────────── Utility helpers ─────────────────────────
