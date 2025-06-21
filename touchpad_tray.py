@@ -192,13 +192,19 @@ class TouchpadTray:
         last_connected = None
         while self.auto_disable_enabled:
             connected = is_mouse_connected()
+
+            # Re-enable touchpad if it's incorrectly disabled
+            status = get_status()
+            if not connected and status != "enabled":
+                set_status(True)
+                GLib.idle_add(self.update_icon)
+
             if connected != last_connected:
-                # Disable touchpad when mouse present; enable when absent
                 set_status(not connected)
                 GLib.idle_add(self.update_icon)
                 last_connected = connected
-            time.sleep(5)
 
+            time.sleep(5)
 
 if __name__ == "__main__":
     TouchpadTray()
