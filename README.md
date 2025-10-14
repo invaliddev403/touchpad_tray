@@ -1,71 +1,139 @@
-# Description
+# 🖱️ Touchpad Tray (Universal – Wayland & X11)
 
-This is a simple Touchpad Tray Icon for Wayland systems that will toggle the touchpad between enabled/disabled.
+[![Wayland](https://img.shields.io/badge/Wayland-supported-brightgreen)](#-how-it-works)
+[![X11](https://img.shields.io/badge/X11-supported-brightgreen)](#-how-it-works)
+[![Auto‑disable](https://img.shields.io/badge/Auto--disable-USB%2FBT%20mouse-blue)](#-auto-disable-policy)
+[![Tray](https://img.shields.io/badge/System%20Tray-GTK%2FAyatana-9cf)](#-installation-using-installer-script)
 
-It also includes an **auto-disable feature** that disables the touchpad when an external USB or Bluetooth mouse is detected (similar to Windows 11). This behavior is enabled by default and can be toggled via the tray icon menu.
+A simple tray utility that **enables/disables the touchpad** automatically depending on whether an **external (USB/Bluetooth) mouse** is connected. Works on **Wayland** (COSMIC, GNOME, etc.) and **X11**.
 
-# Installer Script
+> On some Wayland desktops the GNOME `gsettings` key isn’t honored; this app controls the device directly:
+> - **Wayland:** via *evdev* grab/ungrab (user in `input` group, no sudo at runtime).
+> - **X11:** via `xinput` (with evdev as fallback).
+
+---
+
+## ✨ Features
+
+- Works on **Wayland** and **X11** automatically.
+- **Auto‑disable policy** (always on):  
+  1. No external USB/BT mouse → **Touchpad Enabled**  
+  2. External USB/BT mouse connected → **Touchpad Disabled**  
+  3. External mouse disconnected → **Touchpad Enabled**  
+- **Manual toggle** acts as a temporary override (toggle again to return to auto).
+- **Debug menu:** “List external‑mouse devices” to show what the app is counting.
+- Autostart support + app menu entry.
+
+---
+
+## 🔧 Installation (using installer script)
 
 ```bash
 chmod +x install_touchpad_tray.sh
 ./install_touchpad_tray.sh
 ```
 
-This will:
-- Install the tray app to `~/.local/bin`
-- Create an autostart entry in `~/.config/autostart`
-- Add a launcher icon to your desktop app menu via `~/.local/share/applications`
-- Install all required dependencies using either `apt` or `pacman`
+The script will:
 
-# Manual Install
+- Install the script to `~/.local/bin`.
+- Create autostart and applications menu entries.
+- Install required dependencies: `python3-gi`, `gir1.2-gtk-3.0`, **Ayatana/AppIndicator**, `python3-evdev`, **python3-pyudev**, `libinput-tools`, `xinput`.
+- Add your user to the `input` group (log out/in once).
 
-## Install Requirements
+---
+
+## ⚙️ Manual Install
+
+**Debian / Ubuntu / Pop!\_OS**
 
 ```bash
-# Debian/Ubuntu
+sudo apt update
 sudo apt install \
   python3-gi \
   gir1.2-gtk-3.0 \
-  gir1.2-appindicator3-0.1 \
+  gir1.2-ayatanaappindicator3-0.1 \
   gsettings-desktop-schemas \
-  usbutils
+  python3-evdev \
+  python3-pyudev \
+  libinput-tools \
+  xinput
+sudo gpasswd -a "$USER" input   # log out/in after this
+```
 
-# Arch
+**Arch Linux**
+
+```bash
 sudo pacman -S \
   python-gobject \
   libappindicator-gtk3 \
-  gsettings-desktop-schemas
+  gsettings-desktop-schemas \
+  python-evdev \
+  python-pyudev \
+  libinput \
+  xorg-xinput
+sudo gpasswd -a "$USER" input
 ```
 
-## Install Script Manually
+**Install the script and desktop files**
 
-1. Copy the script into your PATH:
 ```bash
-mkdir -p ~/.local/bin
+mkdir -p ~/.local/bin ~/.config/autostart ~/.local/share/applications
 cp touchpad_tray.py ~/.local/bin/
 chmod +x ~/.local/bin/touchpad_tray.py
+sed "s|Exec=.*|Exec=/usr/bin/env python3 $HOME/.local/bin/touchpad_tray.py|" \
+  touchpad-tray.desktop > ~/.config/autostart/touchpad-tray.desktop
+cp ~/.config/autostart/touchpad-tray.desktop \
+   ~/.local/share/applications/touchpad-tray.desktop
 ```
 
-2. Install the `.desktop` file:
+Run it manually for a first launch:
+
 ```bash
-mkdir -p ~/.config/autostart ~/.local/share/applications
-
-# Update Exec path and install to both locations
-sed "s|Exec=.*|Exec=$HOME/.local/bin/touchpad_tray.py|" touchpad-tray.desktop > ~/.config/autostart/touchpad-tray.desktop
-cp ~/.config/autostart/touchpad-tray.desktop ~/.local/share/applications/touchpad-tray.desktop
+python3 ~/.local/bin/touchpad_tray.py &
 ```
 
-✅ This ensures:
-- The app autostarts on login
-- The app appears in your desktop launcher (Activities, Start menu, etc)
+---
 
-## Optional Configuration
+## 🧠 How detection works
 
-Auto-disable is **enabled by default**. You can toggle this at runtime via the tray menu.
+- We listen to **udev** events on `SUBSYSTEM=input` and treat a device as **external mouse** iff:
+  - `ID_INPUT_MOUSE=1` **and** (`ID_BUS=usb` or `bluetooth`, or the device path contains `/usb/` or `/bluetooth/`), and
+  - It is **not** a touchpad (`ID_INPUT_TOUCHPAD!=1`) and **not** an internal i2c/serio/platform device (heuristics exclude common names like Synaptics/ELAN and i2c/serio paths).
+- We also keep a light **periodic poll** and fall back to `libinput`/`/proc/bus/input/devices` if needed.
 
-Config is stored in:
+This avoids misclassifying internal touchpads that also expose a “mouse” node.
+
+---
+
+## 🧪 Troubleshooting
+
+| Symptom | What to check |
+|---|---|
+| Touchpad won’t disable/enable on Wayland | Confirm group membership: `groups | grep -w input` (then log out/in if you just added it) |
+| Auto‑disable not reacting to USB receiver | `udevadm monitor --udev --property` should show `SUBSYSTEM=input` events with `ID_INPUT_MOUSE=1` on plug/unplug |
+| AppIndicator tray icon missing | Install Ayatana: `gir1.2-ayatanaappindicator3-0.1` (Pop!\_OS/Ubuntu) |
+| X11 toggling doesn’t work | Install `xinput` and ensure `$XDG_SESSION_TYPE` is `x11` |
+| See what the app counts as “external” | Tray → **Debug: List external‑mouse devices** |
+
+---
+
+## 🧹 Uninstall
+
 ```bash
-~/.config/touchpad_tray.conf
+rm -f ~/.local/bin/touchpad_tray.py
+rm -f ~/.config/autostart/touchpad-tray.desktop
+rm -f ~/.local/share/applications/touchpad-tray.desktop
+sudo gpasswd -d "$USER" input
 ```
-Delete this file to reset to defaults.
 
+---
+
+## ❗ Notes
+
+- Do **not** run with `sudo` — it must run inside your user’s GUI session.
+- On exit the app attempts to **re‑enable** the touchpad so you’re never stranded.
+
+---
+
+## 📄 License
+MIT
