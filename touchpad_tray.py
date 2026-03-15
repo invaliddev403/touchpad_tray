@@ -33,6 +33,7 @@ if not ok:
 APP_ID = "touchpad_tray"
 ICON_ENABLED = "input-touchpad-symbolic"
 ICON_DISABLED = "input-mouse-symbolic"
+VERSION = "1.2"
 
 IS_WAYLAND = (os.environ.get("XDG_SESSION_TYPE") or "").lower() == "wayland"
 DESKTOP = (os.environ.get("XDG_CURRENT_DESKTOP") or "").upper()
@@ -80,7 +81,13 @@ def _touchpad_event_via_libinput():
         out = subprocess.check_output(["libinput", "list-devices"], text=True, stderr=subprocess.DEVNULL)
         dev, node, tags = None, None, ""
         def accept():
-            return node and ("touchpad" in (dev or "").lower() or "touchpad" in (tags or ""))
+            d = (dev or "").lower()
+            t = (tags or "").lower()
+            if not node or ("touchpad" not in d and "touchpad" not in t):
+                return False
+            for ex in ("usb", "bluetooth", "wireless", "receiver", "logitech", "unifying"):
+                if ex in d: return False
+            return True
         for line in out.splitlines() + [""]:
             if line.startswith("Device:"):
                 if accept(): return node
@@ -101,6 +108,8 @@ def _touchpad_event_via_proc():
         for block in txt.split("\n\n"):
             low = block.lower()
             if "touchpad" in low and "handlers=" in low:
+                if any(x in low for x in ("usb", "bluetooth", "wireless", "receiver", "logitech", "unifying")):
+                    continue
                 for part in block.split():
                     if part.startswith("event"):
                         p = f"/dev/input/{part}"
@@ -174,7 +183,10 @@ def xinput_touchpad_ids():
     try:
         out = subprocess.check_output(["xinput","list"], text=True, stderr=subprocess.DEVNULL)
         for line in out.splitlines():
-            if "id=" in line and any(k in line.lower() for k in ("touchpad","synaptics","elan","trackpad","libinput touchpad")):
+            low = line.lower()
+            if "id=" in low and any(k in low for k in ("touchpad","synaptics","elan","trackpad","libinput touchpad")):
+                if any(x in low for x in ("usb", "bluetooth", "wireless", "receiver", "logitech", "unifying")):
+                    continue
                 try:
                     dev_id = int(line.split("id=")[1].split()[0])
                     ids.append(dev_id)
@@ -436,13 +448,17 @@ class TouchpadTray:
         self.policy_item = Gtk.MenuItem(label="Policy: Auto (disable on external mouse)")
         menu.append(self.policy_item)
 
-        dbg = Gtk.MenuItem(label="Show Status in Terminal")
+        dbg = Gtk.MenuItem(label="Show Status")
         dbg.connect("activate", self.show_status)
         menu.append(dbg)
 
         dbg2 = Gtk.MenuItem(label="Debug: List external-mouse devices")
         dbg2.connect("activate", self.show_devices)
         menu.append(dbg2)
+
+        about_item = Gtk.MenuItem(label="About")
+        about_item.connect("activate", self.show_about)
+        menu.append(about_item)
 
         quit_item = Gtk.MenuItem(label="Quit")
         quit_item.connect("activate", self.quit)
@@ -532,15 +548,37 @@ class TouchpadTray:
 
     def show_status(self, _):
         has_mouse = self.mouse_watcher.has_external_mouse() if self.mouse_watcher else None
-        print(f"[status] {self.ctrl.info()} state={self.ctrl.get_status()} external_mouse={has_mouse} override={self.manual_override}")
+        msg = f"Backend: {self.ctrl.info()}\nState: {self.ctrl.get_status()}\nExternal Mouse: {has_mouse}\nOverride: {self.manual_override}"
+        dialog = Gtk.MessageDialog(
+            flags=0, message_type=Gtk.MessageType.INFO,
+            buttons=Gtk.ButtonsType.OK, text="System Status"
+        )
+        dialog.format_secondary_text(msg)
+        dialog.run()
+        dialog.destroy()
 
     def show_devices(self, _):
         devs = self.mouse_watcher.last_devices() if self.mouse_watcher else []
-        print("[devices considered external]:")
+        msg = ""
         for dn, nm in devs:
-            print(" -", dn, nm or "")
+            msg += f" - {dn}: {nm or ''}\n"
         if not devs:
-            print(" (none)")
+            msg = " (none)\n"
+        dialog = Gtk.MessageDialog(
+            flags=0, message_type=Gtk.MessageType.INFO,
+            buttons=Gtk.ButtonsType.OK, text="External Devices"
+        )
+        dialog.format_secondary_text(msg.strip())
+        dialog.run()
+        dialog.destroy()
+
+    def show_about(self, _):
+        dialog = Gtk.AboutDialog()
+        dialog.set_program_name("Touchpad Tray")
+        dialog.set_version(VERSION)
+        dialog.set_comments("A simple utility that auto-disables the touchpad when an external mouse is connected.")
+        dialog.run()
+        dialog.destroy()
 
 if __name__ == "__main__":
     TouchpadTray()
