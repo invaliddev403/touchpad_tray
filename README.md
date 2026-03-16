@@ -1,4 +1,4 @@
-# 🖱️ Touchpad Tray (Universal – Wayland & X11)
+# Touchpad Tray (Universal - Wayland & X11)
 
 [![Wayland](https://img.shields.io/badge/Wayland-supported-brightgreen)](#-how-it-works)
 [![X11](https://img.shields.io/badge/X11-supported-brightgreen)](#-how-it-works)
@@ -13,7 +13,7 @@ A simple tray utility that **enables/disables the touchpad** automatically depen
 
 ---
 
-## ✨ Features
+## Features
 
 - Works on **Wayland** and **X11** automatically.
 - **Auto‑disable policy** (always on):  
@@ -23,10 +23,11 @@ A simple tray utility that **enables/disables the touchpad** automatically depen
 - **Manual toggle** acts as a temporary override (toggle again to return to auto).
 - **Debug menu:** “List external‑mouse devices” to show what the app is counting.
 - Autostart support + app menu entry.
+- Optional lid-open USB reset service for external mice that need a reset after resume.
 
 ---
 
-## 🔧 Installation (using installer script)
+## Installation (using installer script)
 
 ```bash
 chmod +x install_touchpad_tray.sh
@@ -39,10 +40,23 @@ The script will:
 - Create autostart and applications menu entries.
 - Install required dependencies: `python3-gi`, `gir1.2-gtk-3.0`, **Ayatana/AppIndicator**, `python3-evdev`, **python3-pyudev**, `libinput-tools`, `xinput`.
 - Add your user to the `input` group (log out/in once).
+- Ask whether to install the optional `usb-reset-on-lid.service`.
+
+If you want to skip or force the reset service without a prompt:
+
+```bash
+./install_touchpad_tray.sh --without-usb-reset
+./install_touchpad_tray.sh --with-usb-reset
+```
+
+The optional reset service installs:
+
+- [usb_reset_on_lid.py](/home/juniper/Tools/touchpad_tray/usb_reset_on_lid.py) to `/usr/local/bin/usb_reset_on_lid.py`
+- [usb-reset-on-lid.service](/home/juniper/Tools/touchpad_tray/usb-reset-on-lid.service) to `/etc/systemd/system/usb-reset-on-lid.service`
 
 ---
 
-## ⚙️ Manual Install
+## Manual Install
 
 **Debian / Ubuntu / Pop!\_OS**
 
@@ -94,7 +108,7 @@ python3 ~/.local/bin/touchpad_tray.py &
 
 ---
 
-## 🧠 How detection works
+## How detection works
 
 - We listen to **udev** events on `SUBSYSTEM=input` and treat a device as **external mouse** iff:
   - `ID_INPUT_MOUSE=1` **and** (`ID_BUS=usb` or `bluetooth`, or the device path contains `/usb/` or `/bluetooth/`), and
@@ -105,7 +119,7 @@ This avoids misclassifying internal touchpads that also expose a “mouse” nod
 
 ---
 
-## 🧪 Troubleshooting
+## Troubleshooting
 
 | Symptom | What to check |
 |---|---|
@@ -117,7 +131,7 @@ This avoids misclassifying internal touchpads that also expose a “mouse” nod
 
 ---
 
-## 🧹 Uninstall
+## Uninstall
 
 ```bash
 rm -f ~/.local/bin/touchpad_tray.py
@@ -126,14 +140,23 @@ rm -f ~/.local/share/applications/touchpad-tray.desktop
 sudo gpasswd -d "$USER" input
 ```
 
+If you installed the optional lid-reset service:
+
+```bash
+sudo systemctl disable --now usb-reset-on-lid.service
+sudo rm -f /etc/systemd/system/usb-reset-on-lid.service
+sudo rm -f /usr/local/bin/usb_reset_on_lid.py
+sudo systemctl daemon-reload
+```
+
 ---
 
-## ❗ Notes
+## Notes
 
 - Do **not** run with `sudo` — it must run inside your user’s GUI session.
 - On exit the app attempts to **re‑enable** the touchpad so you’re never stranded.
 
 ---
 
-## 📄 License
+## License
 MIT

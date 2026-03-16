@@ -1,0 +1,12 @@
+[Unit]
+Description=Reset USB mouse devices on Lid Open
+After=systemd-logind.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/usb_reset_on_lid.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

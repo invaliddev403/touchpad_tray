@@ -33,7 +33,7 @@ if not ok:
 APP_ID = "touchpad_tray"
 ICON_ENABLED = "input-touchpad-symbolic"
 ICON_DISABLED = "input-mouse-symbolic"
-VERSION = "1.2"
+VERSION = "1.4"
 
 IS_WAYLAND = (os.environ.get("XDG_SESSION_TYPE") or "").lower() == "wayland"
 DESKTOP = (os.environ.get("XDG_CURRENT_DESKTOP") or "").upper()
@@ -96,6 +96,9 @@ def _touchpad_event_via_libinput():
                 node = line.split()[-1].strip()
             elif "Tags:" in line:
                 tags = line.split(":",1)[1].strip().lower()
+            elif line.startswith(" ") and not ":" in line and dev is not None:
+                # Append multi-line strings (libinput wraps output)
+                dev += " " + line.strip()
             elif not line.strip():
                 if accept(): return node
     except Exception:
@@ -138,32 +141,70 @@ class EvdevController:
         self.event_path = node
         try:
             self.dev = InputDevice(self.event_path)
+            if not self.enabled:
+                self.dev.grab()
         except PermissionError:
             raise PermissionError(
                 f"Permission denied opening {self.event_path}. "
                 "Add your user to 'input' group then re-log: sudo gpasswd -a $USER input"
             )
-    def set_enabled(self, enabled: bool) -> bool:
+        except Exception:
+            self.enabled = True
+
+    def _ensure_valid(self):
+        # Even if we have a dev object, the underlying node could have been changed by a sleep/resume cycle.
         if self.dev is None:
-            self.resolve()
+            return False
+        try:
+            import evdev
+            # Does the old path still point to an evdev device?
+            if self.event_path not in evdev.list_devices():
+                return False
+            # Read an ioctl to check fd
+            self.dev.active_keys()
+            return True
+        except Exception:
+            return False
+
+    def set_enabled(self, enabled: bool) -> bool:
+        if not self._ensure_valid():
+            try:
+                self.resolve()
+            except Exception:
+                pass
+            
+        if self.dev is None:
+            self.enabled = enabled
+            return False
+            
         if enabled:
-            try: self.dev.ungrab()
-            except Exception: pass
+            try:
+                self.dev.ungrab()
+            except Exception:
+                pass
             self.enabled = True
             return True
         else:
             try:
                 self.dev.grab()
-                self.enabled = False
-                return True
+            except OSError:
+                # If grab fails due to EBUSY (already grabbed) or ENODEV (device gone)
+                # Attempt a clean re-resolve.
+                try:
+                    self.resolve()
+                    self.dev.grab()
+                except Exception:
+                    pass
             except Exception:
-                # hotplug → one re-resolve attempt
-                self.resolve()
-                self.dev.grab()
-                self.enabled = False
-                return True
+                pass
+            self.enabled = False
+            return True
+
     def get_status(self) -> str:
+        if not self._ensure_valid():
+            self.enabled = True
         return "enabled" if self.enabled else "disabled"
+
     def close(self):
         try:
             if self.dev:
@@ -326,6 +367,8 @@ def libinput_has_external_mouse():
             caps = ""
         elif ln.startswith("Capabilities:"):
             caps = ln.split(":",1)[1].strip()
+        elif ln.startswith(" ") and not ":" in ln and dev is not None:
+            dev += " " + ln.strip()
         elif not ln.strip():
             if dev and ("pointer" in caps.lower()) and ("touchpad" not in dev.lower()):
                 has = True
@@ -536,6 +579,9 @@ class TouchpadTray:
         Gtk.main_quit()
 
     def update_icon(self):
+        if self.manual_override is None:
+            self._apply_policy()
+        
         st = self.ctrl.get_status()
         if st == "enabled":
             self.ind.set_icon_full(ICON_ENABLED, "Touchpad Enabled")
